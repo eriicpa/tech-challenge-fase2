@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────
+# Tech Challenge Fase 2 — Pipeline Híbrido de Alfabetização
+# Instalação: pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────
+
+# Núcleo (Notebooks 01 a 04)
+pandas>=2.0
+numpy>=1.24
+pyarrow>=14.0
+requests>=2.31
+scipy>=1.11
+
+# Qualidade de dados e relatórios
+tabulate>=0.9
+colorama>=0.4
+
+# Camada Gold — Notebook 03
+pyspark==3.5.1        # motor principal (Colab e AWS Glue)
+duckdb>=0.10          # motor alternativo quando não há Java/Spark
+
+# Streaming — Notebook 02
+kafka-python-ng>=2.2  # opcional: há um broker local em src/streaming/broker_local.py
+
+# Análise e IA — Notebook 04
+scikit-learn>=1.3
+matplotlib>=3.7
+
+# Opcional: extração dos microdados de aluno via BigQuery (Base dos Dados)
+# basedosdados>=2.0

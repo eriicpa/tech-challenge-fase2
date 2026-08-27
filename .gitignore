@@ -1,0 +1,41 @@
+# ─── Data lake gerado pela pipeline (reconstruível a partir dos notebooks) ───
+data/lake/
+data/landing/_cache/
+
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ─── Jupyter ───
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# ─── Spark / Hadoop ───
+spark-warehouse/
+metastore_db/
+derby.log
+*.crc
+_SUCCESS
+
+# ─── Credenciais (nunca versionar) ───
+.env
+*.pem
+credentials.json
+service-account*.json
+.aws/
+
+# ─── Sistema operacional / IDE ───
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Exportacoes para visualizacao (gerado pelo notebook 00)
+data/export/
+
+# Microdados de aluno extraidos do BigQuery (grandes; rode src/ingestion/extrair_bigquery.py)
+data/landing/alunos.parquet
