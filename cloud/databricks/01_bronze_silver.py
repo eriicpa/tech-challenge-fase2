@@ -584,7 +584,8 @@ if n_divergentes:
 # ============================================================
 # RESUMO
 # ============================================================
-tabelas = spark.sql(f"SHOW TABLES IN {CATALOGO}.{SCHEMA_SILVER}").collect()
+tabelas = [t for t in spark.sql(f"SHOW TABLES IN {CATALOGO}.{SCHEMA_SILVER}").collect()
+           if not t.isTemporary]
 linhas = [(t.tableName, spark.table(f"{CATALOGO}.{SCHEMA_SILVER}.{t.tableName}").count())
           for t in tabelas]
 

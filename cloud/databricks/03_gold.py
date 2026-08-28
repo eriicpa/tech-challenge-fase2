@@ -279,7 +279,11 @@ for tabela, colunas in OTIMIZAR.items():
 # ============================================================
 linhas = []
 for schema in (SCHEMA_BRONZE, SCHEMA_SILVER, SCHEMA_GOLD):
+    # isTemporary filtra as views de sessao criadas acima, que aparecem no
+    # SHOW TABLES de qualquer schema mas nao pertencem a nenhum.
     for t in spark.sql(f"SHOW TABLES IN {CATALOGO}.{schema}").collect():
+        if t.isTemporary:
+            continue
         nome = f"{CATALOGO}.{schema}.{t.tableName}"
         linhas.append((schema, t.tableName, spark.table(nome).count()))
 
