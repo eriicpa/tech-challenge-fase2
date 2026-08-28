@@ -410,8 +410,7 @@ comparacao = (reconstruido
                                           "taxa_alfabetizacao", "media_portugues"),
           on=["ano", "id_municipio", "rede"], how="inner")
     .withColumn("erro_taxa", F.abs(F.col("taxa_reconstruida") - F.col("taxa_alfabetizacao")))
-    .withColumn("erro_media", F.abs(F.col("media_reconstruida") - F.col("media_portugues")))
-    .cache())
+    .withColumn("erro_media", F.abs(F.col("media_reconstruida") - F.col("media_portugues"))))
 
 resumo = comparacao.agg(
     F.count("*").alias("combinacoes"),
