@@ -46,7 +46,7 @@ Como os arquivos já existem, o truque é começar com o repositório vazio e ir
 cd C:\Users\Eric\disc_tmp\tc2-databricks
 git init
 git branch -M main
-git remote add origin https://github.com/SEU-USUARIO/SEU-REPO.git
+git remote add origin https://github.com/eriicpa/tech-challenge-fase2.git
 ```
 
 Nada foi adicionado ainda: o `git status` mostra tudo como *untracked*. Cada PR abaixo adiciona um

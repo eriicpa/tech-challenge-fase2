@@ -43,7 +43,7 @@ git init
 git add .
 git commit -m "estrutura inicial do projeto"
 git branch -M main
-git remote add origin https://github.com/SEU-USUARIO/SEU-REPO.git
+git remote add origin https://github.com/eriicpa/tech-challenge-fase2.git
 git push -u origin main
 ```
 
@@ -72,7 +72,7 @@ criar cluster.
 1. Menu lateral esquerdo: **Workspace**
 2. Botão **Create**, no canto superior direito
 3. Escolha **Git folder**
-4. Em *Git repository URL*, cole `https://github.com/SEU-USUARIO/SEU-REPO.git`
+4. Em *Git repository URL*, cole `https://github.com/eriicpa/tech-challenge-fase2.git`
 5. O campo *Git provider* preenche sozinho como GitHub
 6. Clique em **Create Git folder**
 
