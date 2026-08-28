@@ -381,7 +381,7 @@ fato_aluno = (aluno_bronze
             "proficiencia_portugues", "alfabetizado", "avaliado", "faixa_proficiencia",
             "presenca", "preenchimento_caderno", "peso_aluno"))
 
-gravar_silver(fato_aluno, "fato_aluno")
+gravar(fato_aluno, SCHEMA_SILVER, "fato_aluno")
 
 total = spark.table(f"{CATALOGO}.{SCHEMA_SILVER}.fato_aluno").count()
 avaliados = spark.table(f"{CATALOGO}.{SCHEMA_SILVER}.fato_aluno").filter("avaliado").count()
