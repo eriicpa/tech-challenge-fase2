@@ -210,8 +210,11 @@ def motivo_rejeicao(df):
 
 
 def processar_lote(lote, epoca):
+    # O Databricks roda em modo ANSI, onde to_timestamp lanca excecao em valor
+    # malformado. O try_to_timestamp devolve NULL, que e o que a regra
+    # timestamp_invalido espera para mandar o evento ao DLQ.
     marcado = (lote
-               .withColumn("ts_convertido", F.to_timestamp("ts_evento"))
+               .withColumn("ts_convertido", F.expr("try_to_timestamp(ts_evento)"))
                .join(F.broadcast(dim_municipio), on="id_municipio", how="left"))
     marcado = marcado.withColumn("motivo_rejeicao", motivo_rejeicao(marcado))
 
@@ -295,7 +298,7 @@ QUEDA_ALERTA_PP = 10.0
 stream = spark.table(TABELA_STREAM)
 
 janelas = (stream
-           .groupBy(F.window(F.to_timestamp("ts_evento"), "10 seconds"), "sigla_uf")
+           .groupBy(F.window(F.expr("try_to_timestamp(ts_evento)"), "10 seconds"), "sigla_uf")
            .agg(F.count("*").alias("eventos"),
                 F.round(F.sum(F.col("alfabetizado").cast("double") * F.col("peso_aluno"))
                         / F.sum("peso_aluno") * 100, 2).alias("taxa_pct"),
