@@ -1,14 +1,14 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Tech Challenge — Fase 2 | Databricks
-# MAGIC ## Notebook 02 — Ingestão em streaming com Structured Streaming
+# MAGIC # Tech Challenge - Fase 2 | Databricks
+# MAGIC ## Notebook 02 - Ingestão em streaming com Structured Streaming
 # MAGIC
 # MAGIC > Pré-requisito: `01_bronze_silver` executado.
 # MAGIC
 # MAGIC A Free Edition só oferece compute serverless, então não há como subir um broker Kafka aqui.
-# MAGIC A ingestão em tempo quase real é feita com **Structured Streaming lendo um volume** — que é a
-# MAGIC forma idiomática no Databricks e continua sendo streaming de verdade: fonte incremental,
-# MAGIC checkpoint, exactly-once na escrita Delta e reprocessamento a partir do offset.
+# MAGIC A ingestão em tempo quase real é feita com Structured Streaming lendo um volume, que é a forma
+# MAGIC idiomática no Databricks e continua sendo streaming: fonte incremental, checkpoint,
+# MAGIC exactly-once na escrita Delta e reprocessamento a partir do offset.
 # MAGIC
 # MAGIC | Conceito | Kafka (notebook local) | Aqui |
 # MAGIC |---|---|---|
@@ -69,12 +69,12 @@ print(f"Checkpoint em  : {DIR_CHECKPOINT}")
 # MAGIC %md
 # MAGIC ## Produtor de eventos
 # MAGIC
-# MAGIC Simula os sistemas de aplicação da prova. Dois problemas são injetados de propósito: 5% de
-# MAGIC eventos defeituosos, para exercitar a DLQ, e uma queda real de desempenho em 5 municípios,
-# MAGIC para exercitar as regras de alerta.
+# MAGIC Os eventos são registros reais de aluno lidos da Silver. O que é simulado aqui é só o
+# MAGIC transporte, já que na prática eles chegariam das escolas aos poucos.
 # MAGIC
-# MAGIC Os eventos saem em 3 arquivos, para o streaming enxergar 3 lotes chegando em momentos
-# MAGIC diferentes, como aconteceria na vida real.
+# MAGIC Dois problemas são injetados de propósito: 5% de eventos defeituosos, para exercitar a DLQ, e
+# MAGIC uma queda de desempenho em 5 municípios, para exercitar as regras de alerta. Os eventos saem
+# MAGIC em 3 arquivos, para o streaming enxergar 3 lotes chegando em momentos diferentes.
 
 # COMMAND ----------
 
@@ -173,11 +173,13 @@ print(f"\n{len(arquivos)} arquivos de evento no volume")
 # MAGIC %md
 # MAGIC ## Stream processor
 # MAGIC
-# MAGIC Um `foreachBatch` faz, para cada micro-lote: valida contra o contrato, separa o que falhou para
-# MAGIC a DLQ com o motivo, enriquece o que passou com a dimensão territorial e a regra dos 743 pontos,
-# MAGIC e grava as duas tabelas Delta. O `trigger(availableNow=True)` processa tudo que está disponível
-# MAGIC e encerra — é o modo certo para um job agendado, em vez de deixar compute ligado sem evento
-# MAGIC chegando (o mesmo raciocínio de FinOps do broker que só liga na janela de aplicação).
+# MAGIC Um `foreachBatch` faz, para cada micro-lote: valida contra o contrato, separa o que falhou
+# MAGIC para a DLQ com o motivo, enriquece o que passou com a dimensão territorial e a regra dos 743
+# MAGIC pontos, e grava as duas tabelas Delta.
+# MAGIC
+# MAGIC O `trigger(availableNow=True)` processa tudo que está disponível e encerra. É o único gatilho
+# MAGIC suportado no serverless, e também o mais adequado para um job agendado: evita deixar compute
+# MAGIC ligado sem evento chegando.
 
 # COMMAND ----------
 
@@ -279,9 +281,9 @@ else:
 # MAGIC %md
 # MAGIC ## Janelas e alertas
 # MAGIC
-# MAGIC Duas agregações: janela temporal por tempo de evento (throughput e latência) e acumulado por
-# MAGIC município, que alimenta as regras de alerta. A regra de queda compara o que está chegando agora
-# MAGIC com o indicador consolidado da Silver — é onde batch e streaming se encontram.
+# MAGIC Duas agregações: janela temporal por tempo de evento, que dá throughput e latência, e
+# MAGIC acumulado por município, que alimenta as regras de alerta. A regra de queda compara o que está
+# MAGIC chegando agora com o indicador consolidado da Silver, que é onde batch e streaming se encontram.
 
 # COMMAND ----------
 
@@ -341,9 +343,9 @@ display(alertas)
 # MAGIC %md
 # MAGIC ## Upsert na Silver
 # MAGIC
-# MAGIC O `MERGE INTO` do Delta é o que torna o reprocessamento seguro: se o mesmo evento chegar duas
-# MAGIC vezes — por replay do checkpoint ou por reenvio da origem — ele atualiza a linha em vez de
-# MAGIC duplicar. É o equivalente ao dedup por `id_evento` da versão local, só que resolvido pelo motor.
+# MAGIC O `MERGE INTO` do Delta torna o reprocessamento seguro. Se o mesmo evento chegar duas vezes,
+# MAGIC seja por replay do checkpoint ou por reenvio da origem, ele atualiza a linha em vez de
+# MAGIC duplicar. É o equivalente ao dedup por `id_evento` da versão local, resolvido pelo motor.
 
 # COMMAND ----------
 
