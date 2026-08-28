@@ -13,8 +13,7 @@
 # MAGIC DuckDB no desenvolvimento, Spark local e agora Databricks. Se a definição de risco crítico
 # MAGIC mudar, muda em um lugar.
 # MAGIC
-# MAGIC Para o `import` funcionar, o repositório precisa ter sido adicionado como Git folder
-# MAGIC (ver `docs/guia_deploy_databricks.md`).
+# MAGIC Para o `import` funcionar, o repositório precisa ter sido adicionado como Git folder.
 
 # COMMAND ----------
 

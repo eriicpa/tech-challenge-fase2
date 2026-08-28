@@ -24,8 +24,6 @@
 # MAGIC 1. Volume criado e os 8 arquivos enviados: 7 CSVs e o Parquet de microdados de aluno
 # MAGIC    (a primeira célula cria o volume; a segunda confere o que falta).
 # MAGIC 2. Repositório importado como Git folder, para que `src/` fique acessível.
-# MAGIC
-# MAGIC O passo a passo completo está em `docs/guia_deploy_databricks.md`.
 
 # COMMAND ----------
 
