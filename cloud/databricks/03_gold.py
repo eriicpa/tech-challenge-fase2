@@ -1,19 +1,19 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Tech Challenge — Fase 2 | Databricks
-# MAGIC ## Notebook 03 — Camada Gold
+# MAGIC # Tech Challenge - Fase 2 | Databricks
+# MAGIC ## Notebook 03 - Camada Gold
 # MAGIC
 # MAGIC > Pré-requisitos: `01_bronze_silver` e `02_streaming` executados.
 # MAGIC
-# MAGIC Este notebook **não tem SQL escrito nele**. Ele importa `src/gold/consultas.py` — o mesmo
-# MAGIC arquivo que o notebook local e o job do AWS Glue usam — e executa as consultas aqui.
+# MAGIC Este notebook não tem SQL escrito nele. Ele importa `src/gold/consultas.py`, o mesmo arquivo
+# MAGIC que o notebook local e o job do AWS Glue usam, e executa as consultas aqui.
 # MAGIC
 # MAGIC É o retorno prático de ter escrito a Gold em SQL padrão em vez da DSL do Spark: a regra de
-# MAGIC negócio tem **uma fonte só**, versionada no Git, e já rodou em três motores diferentes
-# MAGIC (DuckDB no desenvolvimento, Spark local e agora Databricks). Se a definição de "risco crítico"
+# MAGIC negócio tem uma fonte só, versionada no Git, e já rodou em três motores diferentes, sendo
+# MAGIC DuckDB no desenvolvimento, Spark local e agora Databricks. Se a definição de risco crítico
 # MAGIC mudar, muda em um lugar.
 # MAGIC
-# MAGIC Para o `import` funcionar, o repositório precisa ter sido adicionado como **Git folder**
+# MAGIC Para o `import` funcionar, o repositório precisa ter sido adicionado como Git folder
 # MAGIC (ver `docs/guia_deploy_databricks.md`).
 
 # COMMAND ----------
@@ -104,7 +104,7 @@ for view, tabela in VIEWS.items():
 # MAGIC ## Construção da Gold
 # MAGIC
 # MAGIC Cada consulta vira uma tabela Delta em `tc2_gold`. Sem particionamento físico, pelo mesmo
-# MAGIC motivo do notebook 01: nesse volume, o *data skipping* do Delta resolve e particionar só criaria
+# MAGIC motivo do notebook 01: nesse volume o data skipping do Delta resolve, e particionar só criaria
 # MAGIC arquivos pequenos.
 
 # COMMAND ----------
@@ -197,8 +197,8 @@ print(f"\nQuality gate da Gold: {len(verificacoes)} verificacoes aprovadas.")
 # MAGIC ## Otimização das tabelas
 # MAGIC
 # MAGIC `OPTIMIZE` compacta arquivos pequenos e o `ZORDER` reorganiza os dados pelas colunas mais
-# MAGIC filtradas, melhorando o *data skipping*. É o equivalente Delta ao particionamento que fazemos
-# MAGIC no S3 — com a vantagem de não engessar o layout numa coluna só.
+# MAGIC filtradas, melhorando o data skipping. É o equivalente Delta ao particionamento feito no S3,
+# MAGIC com a vantagem de não engessar o layout numa coluna só.
 
 # COMMAND ----------
 
@@ -224,9 +224,9 @@ for tabela, colunas in OTIMIZAR.items():
 # MAGIC %md
 # MAGIC ## Consultas de negócio
 # MAGIC
-# MAGIC As mesmas quatro consultas que estão em `cloud/aws/athena/ddl_gold.sql`, rodando aqui.
-# MAGIC São elas que geram as evidências para a entrega — e as mesmas podem ser coladas no SQL editor
-# MAGIC do Databricks para montar um dashboard.
+# MAGIC As mesmas quatro consultas que estão em `cloud/aws/athena/ddl_gold.sql`, rodando aqui. São
+# MAGIC elas que geram as evidências para a entrega, e podem ser coladas no SQL editor do Databricks
+# MAGIC para montar um dashboard.
 
 # COMMAND ----------
 

@@ -1,29 +1,29 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Tech Challenge — Fase 2 | Databricks
-# MAGIC ## Notebook 01 — Bronze e Silver com Delta Lake e Unity Catalog
+# MAGIC # Tech Challenge - Fase 2 | Databricks
+# MAGIC ## Notebook 01 - Bronze e Silver com Delta Lake e Unity Catalog
 # MAGIC
-# MAGIC Implementação da pipeline no **Databricks Free Edition**, seguindo a arquitetura **Lakehouse**
+# MAGIC Implementação da pipeline no Databricks Free Edition, seguindo a arquitetura Lakehouse
 # MAGIC descrita na Aula 03: formatos abertos, metadados, garantias ACID e esquema medalhão sobre uma
 # MAGIC única fonte de dados.
 # MAGIC
 # MAGIC | Ambiente local | Databricks Free Edition |
 # MAGIC |---|---|
-# MAGIC | Parquet em pastas (`data/lake/bronze/...`) | tabelas **Delta** no Unity Catalog (`tc2_bronze.*`) |
-# MAGIC | Ingestão da API do IBGE por HTTP | CSV no volume — a Free Edition restringe saída para a internet |
-# MAGIC | Particionamento físico por data de ingestão | coluna comum + `OPTIMIZE`/`ZORDER` do Delta |
+# MAGIC | Parquet em pastas (`data/lake/bronze/...`) | tabelas Delta no Unity Catalog (`tc2_bronze.*`) |
+# MAGIC | Ingestão da API do IBGE por HTTP | CSV no volume, porque a saída para a internet é restrita |
+# MAGIC | Particionamento físico por data de ingestão | coluna comum e `OPTIMIZE`/`ZORDER` do Delta |
 # MAGIC | Dedup por `drop_duplicates` | `MERGE INTO` transacional |
 # MAGIC
-# MAGIC **A terceira linha é uma decisão, não uma limitação.** Particionar fisicamente uma tabela de
+# MAGIC A terceira linha é uma decisão, não uma limitação. Particionar fisicamente uma tabela de
 # MAGIC 24 mil linhas cria arquivos pequenos demais e piora a leitura. No S3 o particionamento se paga
-# MAGIC porque o Athena cobra por byte escaneado; no Delta, o *data skipping* por estatísticas de
+# MAGIC porque o Athena cobra por byte escaneado. No Delta, o data skipping por estatísticas de
 # MAGIC arquivo já resolve, e o particionamento vira custo.
 # MAGIC
 # MAGIC ### Pré-requisitos
 # MAGIC
 # MAGIC 1. Volume criado e os 8 arquivos enviados: 7 CSVs e o Parquet de microdados de aluno
 # MAGIC    (a primeira célula cria o volume; a segunda confere o que falta).
-# MAGIC 2. Repositório importado como **Git folder**, para que `src/` fique acessível.
+# MAGIC 2. Repositório importado como Git folder, para que `src/` fique acessível.
 # MAGIC
 # MAGIC O passo a passo completo está em `docs/guia_deploy_databricks.md`.
 
@@ -108,9 +108,8 @@ display(dbutils.fs.ls(VOLUME))
 # MAGIC ## Camada Bronze
 # MAGIC
 # MAGIC Dados como vieram da fonte, com colunas de linhagem. A diferença para a versão local é o
-# MAGIC destino: em vez de Parquet numa pasta, tabelas Delta gerenciadas pelo Unity Catalog — o que dá
-# MAGIC de graça controle de acesso, histórico de versões (*time travel*) e `DESCRIBE HISTORY` para
-# MAGIC auditoria.
+# MAGIC destino: em vez de Parquet numa pasta, tabelas Delta gerenciadas pelo Unity Catalog. Isso traz
+# MAGIC controle de acesso, histórico de versões (time travel) e `DESCRIBE HISTORY` para auditoria.
 
 # COMMAND ----------
 
@@ -157,8 +156,8 @@ display(spark.createDataFrame(resumo_bronze, ["entidade", "linhas", "colunas", "
 # MAGIC ## Quality gate da Bronze
 # MAGIC
 # MAGIC Mesmas dimensões do framework local (`src/quality/data_quality.py`), aqui em Spark puro para
-# MAGIC não trazer os dados para o driver. Falha crítica interrompe o notebook — é o que faz um job
-# MAGIC do Lakeflow parar em vez de propagar dado ruim para a Silver.
+# MAGIC não trazer os dados para o driver. Falha crítica interrompe o notebook, o que faz o job do
+# MAGIC Lakeflow parar em vez de propagar dado ruim para a Silver.
 
 # COMMAND ----------
 
@@ -224,8 +223,8 @@ print(f"Quality gate da Bronze: {len(todas)} verificacoes, todas aprovadas.")
 # MAGIC ## Camada Silver
 # MAGIC
 # MAGIC Padronização de tipos, decodificação do domínio `rede`, normalização de chaves, deduplicação
-# MAGIC pelo grão e integração das bases. É o mesmo código do job Glue `cloud/aws/glue/etl_silver.py` —
-# MAGIC muda apenas a origem e o destino (tabelas do Unity Catalog no lugar de caminhos no S3).
+# MAGIC pelo grão e integração das bases. É o mesmo código do job Glue `cloud/aws/glue/etl_silver.py`,
+# MAGIC mudando apenas a origem e o destino: tabelas do Unity Catalog no lugar de caminhos no S3.
 
 # COMMAND ----------
 
@@ -328,7 +327,7 @@ print(f"indicador municipio: {fato_indicador_municipio.count()} | "
 # MAGIC %md
 # MAGIC ### Microdados de aluno
 # MAGIC
-# MAGIC São 3,87 milhões de linhas do Inep, no grão de aluno — a sexta entidade que o desafio pede.
+# MAGIC São 3,87 milhões de linhas do Inep, no grão de aluno. É a sexta entidade que o desafio pede.
 # MAGIC A tabela não cabe no download gratuito do portal da Base dos Dados, então foi extraída do
 # MAGIC BigQuery público e enviada ao volume em Parquet.
 # MAGIC
@@ -337,13 +336,12 @@ print(f"indicador municipio: {fato_indicador_municipio.count()} | "
 # MAGIC
 # MAGIC | Coluna | Efeito |
 # MAGIC |---|---|
-# MAGIC | `presenca` / `preenchimento_caderno` | nem todo matriculado fez a prova; só quem fez entra no cálculo |
-# MAGIC | `peso_aluno` | peso amostral — a taxa oficial é média **ponderada**, não simples |
-# MAGIC | `alfabetizado` | já vem da fonte; preservamos e conferimos contra a regra dos 743 pontos |
+# MAGIC | `presenca` / `preenchimento_caderno` | nem todo matriculado fez a prova, e só quem fez entra no cálculo |
+# MAGIC | `peso_aluno` | peso amostral, então a taxa oficial é média ponderada e não simples |
+# MAGIC | `alfabetizado` | já vem da fonte, então é preservado e conferido contra a regra dos 743 pontos |
 # MAGIC
 # MAGIC A célula de conferência reconstrói o indicador municipal a partir do grão de aluno e compara
-# MAGIC com o número publicado. É a verificação mais forte da pipeline: se a regra estivesse errada,
-# MAGIC o erro apareceria ali.
+# MAGIC com o número publicado. Se a regra estivesse errada, o erro apareceria ali.
 
 # COMMAND ----------
 
@@ -547,7 +545,7 @@ display(integrada.limit(10))
 # MAGIC %md
 # MAGIC ## Consistência entre fontes
 # MAGIC
-# MAGIC A verificação que prova o mapeamento de `rede`: a taxa da rede Municipal no indicador tem que
+# MAGIC Esta verificação prova o mapeamento de `rede`. A taxa da rede Municipal no indicador tem que
 # MAGIC bater com a taxa da tabela de metas municipais. Se o dicionário estivesse errado, daria
 # MAGIC divergência em massa. A tolerância de 0,1 p.p. existe porque as duas fontes oficiais arredondam
 # MAGIC de forma diferente em 2023.
