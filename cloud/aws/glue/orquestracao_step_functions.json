@@ -1,0 +1,102 @@
+{
+  "Comment": "Pipeline TC2 - Alfabetizacao: Bronze -> Silver -> Gold -> Catalogo, com alerta em falha",
+  "StartAt": "IngestaoBronze",
+  "States": {
+    "IngestaoBronze": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "tc2-etl-bronze",
+        "Arguments": {
+          "--BUCKET_LANDING": "SUA-CONTA-tc2-landing",
+          "--BUCKET_SOR": "SUA-CONTA-tc2-data-sor",
+          "--ENTIDADES": "indicador_municipio,indicador_uf,meta_brasil,meta_uf,meta_municipio",
+          "--API_IBGE": "https://servicodados.ibge.gov.br/api/v1/localidades"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Glue.ConcurrentRunsExceededException", "States.TaskFailed"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "Next": "NotificarFalha", "ResultPath": "$.erro" }
+      ],
+      "Next": "TratamentoSilver"
+    },
+
+    "TratamentoSilver": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "tc2-etl-silver",
+        "Arguments": {
+          "--BUCKET_SOR": "SUA-CONTA-tc2-data-sor",
+          "--BUCKET_SOT": "SUA-CONTA-tc2-data-sot"
+        }
+      },
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "Next": "NotificarFalha", "ResultPath": "$.erro" }
+      ],
+      "Next": "CamadaGold"
+    },
+
+    "CamadaGold": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "tc2-etl-gold",
+        "Arguments": {
+          "--BUCKET_SOT": "SUA-CONTA-tc2-data-sot",
+          "--BUCKET_SPEC": "SUA-CONTA-tc2-data-spec",
+          "--TABELAS": "todas"
+        }
+      },
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "Next": "NotificarFalha", "ResultPath": "$.erro" }
+      ],
+      "Next": "AtualizarCatalogo"
+    },
+
+    "AtualizarCatalogo": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+      "Parameters": { "Name": "tc2-crawler-gold" },
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "Next": "NotificarFalha", "ResultPath": "$.erro" }
+      ],
+      "Next": "NotificarSucesso"
+    },
+
+    "NotificarSucesso": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:SUA-CONTA:tc2-pipeline-status",
+        "Subject": "[OK] Pipeline TC2 Alfabetizacao concluida",
+        "Message.$": "States.Format('Execucao {} concluida com sucesso.', $$.Execution.Name)"
+      },
+      "End": true
+    },
+
+    "NotificarFalha": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:SUA-CONTA:tc2-pipeline-alertas",
+        "Subject": "[FALHA] Pipeline TC2 Alfabetizacao",
+        "Message.$": "States.Format('Execucao {} falhou: {}', $$.Execution.Name, $.erro.Cause)"
+      },
+      "Next": "FalhaExecucao"
+    },
+
+    "FalhaExecucao": {
+      "Type": "Fail",
+      "Error": "PipelineTC2Falhou",
+      "Cause": "Uma das etapas do pipeline falhou. Ver detalhes no SNS e no CloudWatch Logs."
+    }
+  }
+}
