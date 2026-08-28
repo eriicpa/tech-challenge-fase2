@@ -31,12 +31,16 @@ dbutils.widgets.text("catalogo", "workspace", "Catálogo")
 dbutils.widgets.text("schema_bronze", "tc2_bronze", "Schema Bronze")
 dbutils.widgets.text("schema_silver", "tc2_silver", "Schema Silver")
 dbutils.widgets.text("schema_gold", "tc2_gold", "Schema Gold")
+dbutils.widgets.text("schema_landing", "tc2_landing", "Schema Landing")
+dbutils.widgets.text("volume", "arquivos", "Volume")
 dbutils.widgets.text("tabelas", "todas", "Tabelas a gerar")
 
 CATALOGO = dbutils.widgets.get("catalogo")
 SCHEMA_BRONZE = dbutils.widgets.get("schema_bronze")
 SCHEMA_SILVER = dbutils.widgets.get("schema_silver")
 SCHEMA_GOLD = dbutils.widgets.get("schema_gold")
+SCHEMA_LANDING = dbutils.widgets.get("schema_landing")
+VOLUME = f"/Volumes/{CATALOGO}/{SCHEMA_LANDING}/{dbutils.widgets.get('volume')}"
 SELECAO_TABELAS = dbutils.widgets.get("tabelas")
 
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOGO}.{SCHEMA_GOLD}")
@@ -276,6 +280,189 @@ for tabela, colunas in OTIMIZAR.items():
 # MAGIC   AND situacao_meta = 'Meta atingida' AND dif_vs_uf < 0
 # MAGIC ORDER BY dif_vs_uf ASC
 # MAGIC LIMIT 20;
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## FinOps
+# MAGIC
+# MAGIC FinOps aqui não é escolher a máquina mais barata, e sim entender o que é cobrado e desenhar
+# MAGIC a pipeline em torno disso.
+# MAGIC
+# MAGIC | Serviço | Unidade cobrada | Alavanca de economia |
+# MAGIC |---|---|---|
+# MAGIC | S3 | GB armazenado por mês | formato comprimido e ciclo de vida por camada |
+# MAGIC | Athena | TB escaneado | particionamento, projeção de colunas e Parquet |
+# MAGIC | Glue | DPU-hora | menos shuffle, menos releitura, job dimensionado |
+# MAGIC | MSK | hora de broker | streaming ligado só na janela em que há evento |
+# MAGIC
+# MAGIC A alavanca dominante é a segunda, porque o Athena cobra por byte lido e não por linha
+# MAGIC devolvida. A célula abaixo mede isso nos próprios dados: a mesma pergunta respondida de
+# MAGIC quatro formas, com os bytes que cada uma obriga a ler.
+
+# COMMAND ----------
+
+# ============================================================
+# BYTES ESCANEADOS: A MESMA PERGUNTA, QUATRO CUSTOS
+# ============================================================
+# Pergunta: "taxa de alfabetizacao por municipio na rede Municipal em 2024?"
+# Sao 4 colunas de 1 ano. A medicao abaixo mostra quantos bytes cada estrategia
+# obriga a ler, que e exatamente o que o Athena cobra.
+import pyarrow.parquet as pq
+
+COLUNAS_NECESSARIAS = {"id_municipio", "nome_municipio", "taxa_alfabetizacao", "rede_nome"}
+ANO_ALVO = 2024
+DIR_MEDICAO = f"{VOLUME}/_finops/gold_indicador_municipio"
+
+
+def formatar_bytes(n):
+    for unidade in ("B", "KB", "MB", "GB"):
+        if n < 1024:
+            return f"{n:.1f} {unidade}"
+        n /= 1024
+    return f"{n:.1f} TB"
+
+
+def bytes_das_colunas(caminho, colunas=None):
+    """Bytes realmente lidos ao projetar apenas algumas colunas.
+
+    Le o rodape do Parquet, que guarda o tamanho comprimido de cada coluna em
+    cada row group. E o mesmo mecanismo que faz o Athena cobrar so pelo lido.
+    """
+    total = 0
+    for arquivo in sorted(Path(caminho).rglob("*.parquet")):
+        metadados = pq.ParquetFile(arquivo).metadata
+        nomes = [metadados.schema.column(i).name for i in range(metadados.num_columns)]
+        for grupo in range(metadados.num_row_groups):
+            for indice, nome in enumerate(nomes):
+                if colunas is None or nome in colunas:
+                    total += metadados.row_group(grupo).column(indice).total_compressed_size
+    return total
+
+
+# A Gold vive em Delta gerenciado, cujos arquivos nao sao acessiveis pelo sistema
+# de arquivos. Para medir bytes reais, a mesma tabela e materializada em Parquet
+# particionado no volume — que e o formato que estaria no S3 sob o Athena.
+(spark.table(f"{CATALOGO}.{SCHEMA_GOLD}.gold_indicador_municipio")
+ .write.mode("overwrite").partitionBy("ano").parquet(DIR_MEDICAO))
+
+csv_origem = f"{VOLUME}/br_inep_avaliacao_alfabetizacao_municipio.csv"
+bytes_csv = [a.size for a in dbutils.fs.ls(csv_origem)][0]
+
+bytes_parquet_total = bytes_das_colunas(DIR_MEDICAO)
+particao_alvo = f"{DIR_MEDICAO}/ano={ANO_ALVO}"
+bytes_particao = bytes_das_colunas(particao_alvo)
+bytes_otimizado = bytes_das_colunas(particao_alvo, COLUNAS_NECESSARIAS)
+
+PRECO_ATHENA_POR_TB = 5.00
+CONSULTAS_POR_MES = 500
+
+
+def custo_athena(bytes_lidos, consultas=CONSULTAS_POR_MES):
+    return bytes_lidos * consultas / (1024 ** 4) * PRECO_ATHENA_POR_TB
+
+
+estrategias = [
+    ("1. CSV, varredura completa", bytes_csv),
+    ("2. Parquet sem particionamento", bytes_parquet_total),
+    (f"3. Parquet + particao (ano={ANO_ALVO})", bytes_particao),
+    ("4. Parquet + particao + projecao de colunas", bytes_otimizado),
+]
+tabela_estrategias = spark.createDataFrame(
+    [(nome, formatar_bytes(b), f"{b / bytes_csv * 100:.1f}%", round(custo_athena(b), 4))
+     for nome, b in estrategias],
+    ["estrategia", "lido", "vs_csv", f"custo_athena_{CONSULTAS_POR_MES}_consultas_usd"])
+
+print("BYTES LIDOS PARA RESPONDER A MESMA PERGUNTA")
+display(tabela_estrategias)
+
+fator = bytes_csv / max(bytes_otimizado, 1)
+print(f"A estrategia 4 le {fator:.0f}x menos bytes que a 1, com o mesmo resultado.")
+print("No Athena, essa e a razao entre as duas contas no fim do mes.")
+
+dbutils.fs.rm(f"{VOLUME}/_finops", True)   # a copia so existia para a medicao
+
+# COMMAND ----------
+
+# ============================================================
+# ESTIMATIVA DE CUSTO MENSAL DA ARQUITETURA
+# ============================================================
+# Precos de referencia us-east-1, de tabela publica. Devem ser reconferidos no
+# AWS Pricing Calculator antes de virarem orcamento.
+PRECOS = {
+    "s3_standard_gb_mes":     0.023,
+    "s3_standard_ia_gb_mes":  0.0125,
+    "s3_glacier_ir_gb_mes":   0.004,
+    "glue_dpu_hora":          0.44,
+    "msk_serverless_hora":    0.75,
+    "cloudwatch_metrica_mes": 0.30,
+}
+
+# Premissas de producao. O dado oficial e anual, mas a operacao nao e: revisoes
+# de meta e correcoes da fonte chegam ao longo do ano.
+PREMISSAS = {
+    "execucoes_batch_mes":   4,     # uma por semana, para capturar republicacoes
+    "dpus_por_execucao":     2,
+    "horas_por_execucao":    0.25,
+    "semanas_streaming_ano": 6,     # janela de aplicacao da avaliacao
+    "consultas_athena_mes":  CONSULTAS_POR_MES,
+    "metricas_cloudwatch":   10,
+}
+
+
+def bytes_do_schema(schema):
+    """Soma o tamanho fisico das tabelas Delta de um schema."""
+    total = 0
+    for t in spark.sql(f"SHOW TABLES IN {CATALOGO}.{schema}").collect():
+        if t.isTemporary:
+            continue
+        detalhe = spark.sql(f"DESCRIBE DETAIL {CATALOGO}.{schema}.{t.tableName}").collect()[0]
+        total += detalhe["sizeInBytes"] or 0
+    return total
+
+
+gb_bronze = bytes_do_schema(SCHEMA_BRONZE) / (1024 ** 3)
+gb_silver = bytes_do_schema(SCHEMA_SILVER) / (1024 ** 3)
+gb_gold = bytes_do_schema(SCHEMA_GOLD) / (1024 ** 3)
+
+custo_glue = (PREMISSAS["execucoes_batch_mes"] * PREMISSAS["dpus_por_execucao"]
+              * PREMISSAS["horas_por_execucao"] * PRECOS["glue_dpu_hora"])
+custo_athena_mes = custo_athena(bytes_otimizado, PREMISSAS["consultas_athena_mes"])
+horas_msk_mes = PREMISSAS["semanas_streaming_ano"] * 7 * 24 / 12
+custo_msk = horas_msk_mes * PRECOS["msk_serverless_hora"]
+
+componentes = [
+    ("S3 Bronze (Glacier IR apos 90 dias)", f"{gb_bronze:.2f} GB",
+     gb_bronze * PRECOS["s3_glacier_ir_gb_mes"]),
+    ("S3 Silver (Standard-IA apos 30 dias)", f"{gb_silver:.2f} GB",
+     gb_silver * PRECOS["s3_standard_ia_gb_mes"]),
+    ("S3 Gold (Standard, sempre quente)", f"{gb_gold:.2f} GB",
+     gb_gold * PRECOS["s3_standard_gb_mes"]),
+    ("AWS Glue (ETL batch)",
+     f"{PREMISSAS['execucoes_batch_mes']}x {PREMISSAS['dpus_por_execucao']} DPU "
+     f"x {PREMISSAS['horas_por_execucao']}h", custo_glue),
+    ("Amazon Athena (consultas analiticas)",
+     f"{PREMISSAS['consultas_athena_mes']} consultas otimizadas", custo_athena_mes),
+    ("Amazon MSK Serverless (janela de aplicacao)",
+     f"{horas_msk_mes:.0f} h/mes (media anual)", custo_msk),
+    ("CloudWatch (metricas e alarmes)",
+     f"{PREMISSAS['metricas_cloudwatch']} metricas",
+     PREMISSAS["metricas_cloudwatch"] * PRECOS["cloudwatch_metrica_mes"]),
+]
+total_mes = sum(c[2] for c in componentes)
+
+print("ESTIMATIVA DE CUSTO MENSAL DA ARQUITETURA EQUIVALENTE NA AWS")
+display(spark.createDataFrame([(n, d, round(c, 4)) for n, d, c in componentes],
+                              ["componente", "dimensionamento", "custo_mes_usd"]))
+print(f"TOTAL ESTIMADO: US$ {total_mes:.2f}/mes  (~US$ {total_mes * 12:.2f}/ano)")
+
+# O contraste que justifica a arquitetura hibrida
+msk_sempre_ligado = 730 * PRECOS["msk_serverless_hora"]
+economia_anual = (msk_sempre_ligado - custo_msk) * 12
+print(f"\nCom o streaming ligado o ano inteiro: US$ {msk_sempre_ligado:.2f}/mes so de MSK.")
+print(f"Ligar o broker apenas na janela de aplicacao economiza "
+      f"US$ {economia_anual:,.2f}/ano".replace(",", "."))
+print("E a maior decisao de FinOps do projeto, e ela e arquitetural, nao de configuracao.")
 
 # COMMAND ----------
 
