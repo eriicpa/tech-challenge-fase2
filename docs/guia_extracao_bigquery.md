@@ -55,7 +55,7 @@ python -m src.ingestion.extrair_bigquery --projeto SEU-PROJETO-AQUI
 O script faz, nesta ordem:
 
 1. **Dry run** de cada consulta — estima quantos bytes serão processados **antes** de executar, sem
-   custo nenhum. É a prática de FinOps que o desafio pede, aplicada de verdade.
+   custo nenhum. É projeção de colunas e filtro de partição aplicados antes de executar.
 2. Extrai a tabela `dicionario` para `data/landing/dicionario.csv` e **imprime o mapeamento oficial
    da coluna `rede`**.
 3. Extrai os microdados de aluno com projeção de colunas (10 das 12) e filtro de ano.

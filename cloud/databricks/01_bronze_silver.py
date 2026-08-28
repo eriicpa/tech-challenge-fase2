@@ -327,9 +327,9 @@ print(f"indicador municipio: {fato_indicador_municipio.count()} | "
 # MAGIC %md
 # MAGIC ### Microdados de aluno
 # MAGIC
-# MAGIC São 3,87 milhões de linhas do Inep, no grão de aluno. É a sexta entidade que o desafio pede.
-# MAGIC A tabela não cabe no download gratuito do portal da Base dos Dados, então foi extraída do
-# MAGIC BigQuery público e enviada ao volume em Parquet.
+# MAGIC São 3,87 milhões de linhas do Inep, no grão de aluno: é a base que sustenta o indicador
+# MAGIC publicado. A tabela não cabe no download gratuito do portal da Base dos Dados, então foi
+# MAGIC extraída do BigQuery público e enviada ao volume em Parquet.
 # MAGIC
 # MAGIC Três colunas mudam a forma de calcular o indicador, e são a diferença entre reproduzir o
 # MAGIC número oficial e chegar perto dele:

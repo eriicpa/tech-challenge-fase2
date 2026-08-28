@@ -224,9 +224,15 @@ for tabela, colunas in OTIMIZAR.items():
 # MAGIC %md
 # MAGIC ## Consultas de negócio
 # MAGIC
-# MAGIC As mesmas quatro consultas que estão em `cloud/aws/athena/ddl_gold.sql`, rodando aqui. São
-# MAGIC elas que geram as evidências para a entrega, e podem ser coladas no SQL editor do Databricks
-# MAGIC para montar um dashboard.
+# MAGIC Quatro perguntas que a camada Gold responde em SQL direto, sem transformação adicional:
+# MAGIC
+# MAGIC 1. Onde intervir primeiro — municípios em risco crítico, do pior para o melhor
+# MAGIC 2. Quais estados estão na rota da meta e quais concentram municípios críticos
+# MAGIC 3. Quanto cada região precisa avançar por ano para chegar em 2030
+# MAGIC 4. Municípios que atingiram a meta do ano mas estão abaixo da média da própria UF
+# MAGIC
+# MAGIC As definições são as mesmas de `cloud/aws/athena/ddl_gold.sql`, então o SQL roda sem
+# MAGIC alteração no Athena ou no SQL editor do Databricks.
 
 # COMMAND ----------
 
@@ -292,8 +298,7 @@ print(f"{inventario.count()} tabelas | "
       f"{inventario.agg(F.sum('linhas')).collect()[0][0]:,} linhas no total".replace(",", "."))
 display(inventario.orderBy("camada", "tabela"))
 
-print("\nEvidencias para a entrega:")
-print("  - print desta tabela de inventario")
-print("  - print do Catalog Explorer mostrando os 3 schemas")
-print("  - print das 4 consultas de negocio acima")
-print("  - print do job no Lakeflow com as 3 tarefas concluidas")
+print("\nCamadas:")
+print(f"  {SCHEMA_BRONZE}: dados como vieram da fonte, com metadados de linhagem")
+print(f"  {SCHEMA_SILVER}: limpos, padronizados e integrados, no grao de municipio e de aluno")
+print(f"  {SCHEMA_GOLD}: agregados por pergunta de negocio, prontos para BI e modelagem")
